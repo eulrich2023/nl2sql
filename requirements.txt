@@ -1,0 +1,4 @@
+llama-index==0.5.12
+sql-alchemy==1.4.45
+psychopg2-binary==2.9.4
+pandas==1.4.2
