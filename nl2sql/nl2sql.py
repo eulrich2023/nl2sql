@@ -192,10 +192,10 @@ def main() -> None:
                 os.environ["OPENAI_API_KEY"] = st.session_state.open_api_key
 
                 model_name = st.selectbox(
-                    "Choose OpenAI model", ("gpt-3.5-turbo", "text-davinci-003", "gpt-4")
+                    "Choose OpenAI model", ("none", "gpt-3.5-turbo", "text-davinci-003", "gpt-4")
                 )
 
-                if model_name:
+                if model_name != "none":
                     # Create LLama DB wrapper
                     st.markdown(
                         (
