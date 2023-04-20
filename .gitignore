@@ -132,3 +132,8 @@ dmypy.json
 
 # vscode
 .lh
+
+# virtualenv
+include
+bin
+pyenv.cfg
