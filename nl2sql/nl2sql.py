@@ -175,7 +175,7 @@ def main() -> None:
         if connection:
             open_api_key = st.text_input(
                 "OpenAI API Key",
-                value=st.secrets.get("open_api_key", st.session_state.get("open_api_key")),
+                value=st.secrets.get("open_api_key", st.session_state.get("open_api_key", "")),
                 type="password",
             )
 

@@ -136,4 +136,4 @@ dmypy.json
 # virtualenv
 include
 bin
-pyenv.cfg
+pyvenv.cfg
