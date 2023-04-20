@@ -23,7 +23,9 @@ from llama_index.indices.struct_store import SQLContextContainerBuilder
 # Function to create a connection string
 def create_connection_string(host: str, port: int, dbname: str, user: str, password: str) -> str:
     """Create a connection string for the database."""
-    return f"postgresql://{user}:{password}@{host}:{port}/{dbname}"
+    quote_plus_password = quote_plus(password)
+    quote_plus_user = quote_plus(user)
+    return f"postgresql://{quote_plus_user}:{quote_plus_password }@{host}:{port}/{dbname}"
 
 
 # Function to connect to the database
@@ -115,7 +117,7 @@ def create_sql_struct_store_index(
 @st.cache_data(ttl=60)
 def query_sql_structure_store(
     _index: GPTSQLStructStoreIndex,
-    _sql_context_container: Any,
+    _sql_context_container: SQLContextContainer,
     connection_string: str,
     query_str: str,
 ) -> Dict[str, Any]:
@@ -123,7 +125,7 @@ def query_sql_structure_store(
 
     Args:
         _index (GPTSQLStructStoreIndex): SQL structure index
-        _sql_context_container (Any): SQL context container
+        _sql_context_container (SQLContextContainer): SQL context container
         connection_string (str): Placeholder to force cache invalidation
         query_str (str): SQL query string
 
@@ -139,7 +141,7 @@ def query_sql_structure_store(
 
 
 def main() -> None:
-    """Start streamlit app."""
+    """Start the streamlit app."""
     st.set_page_config(layout="wide")
     st.title("Natural Language to SQL Query Executor")
 
@@ -163,9 +165,7 @@ def main() -> None:
     if connect_button or st.session_state.get("connect_clicked"):
         st.session_state.connect_clicked = True
         # change label of connect button to 'Connected'
-        connection_string = create_connection_string(
-            host, port, dbname, quote_plus(user), quote_plus(password)
-        )
+        connection_string = create_connection_string(host, port, dbname, user, password)
 
         connection = connect_to_database(connection_string=connection_string)
 
@@ -190,15 +190,18 @@ def main() -> None:
                 os.environ["OPENAI_API_KEY"] = st.session_state.open_api_key
 
                 # Create LLama DB wrapper
-                st.write(
-                    f"Create DB wrapper. Inspect schemas, tables and views inside '{dbname}' DB."
+                st.markdown(
+                    (
+                        ":blue[Create DB wrapper."
+                        f" Inspect schemas, tables and views inside **_{dbname}_** DB.]"
+                    )
                 )
                 sql_database = create_llama_db_wrapper(
                     connection, connection_string=connection_string
                 )
 
                 # build llama sqlindex
-                st.write("Build table schema index.")
+                st.write(":blue[Build table schema index.]")
                 table_schema_index, context_builder = build_table_schema_index(
                     sql_database, connection_string=connection_string
                 )
@@ -208,15 +211,18 @@ def main() -> None:
 
                 # Execute the SQL query when 'Run' button is clicked
                 if run_button or query_str:
-                    sql_context_container = build_sql_context_container(
-                        context_builder, table_schema_index, query_str
-                    )
-
                     index = create_sql_struct_store_index(
                         sql_database, connection_string=connection_string
                     )
 
-                    st.write("Prepare and execute query...")
+                    sql_context_container = build_sql_context_container(
+                        context_builder, table_schema_index, query_str
+                    )
+
+                    # st.write(sql_context_container.context_str)
+                    # st.write(sql_context_container.context_dict)
+
+                    st.markdown(":blue[Prepare and execute query...]")
                     response = query_sql_structure_store(
                         _index=index,
                         _sql_context_container=sql_context_container,
@@ -224,7 +230,9 @@ def main() -> None:
                         query_str=query_str,
                     )
 
-                    st.write(f"AI Generated query: {response.extra_info['sql_query']}")
+                    st.markdown(
+                        f":blue[Generated query:] :green[_{response.extra_info['sql_query']}_]"
+                    )
                     st.dataframe(pd.DataFrame(response.extra_info["result"]))
 
 
