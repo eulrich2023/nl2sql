@@ -57,7 +57,9 @@ def create_llama_db_wrapper(
 
 
 @st.cache_resource
-def build_table_schema_index(_sql_database: SQLDatabase, connection_string: str) -> tuple[Any, Any]:
+def build_table_schema_index(
+    _sql_database: SQLDatabase, connection_string: str, model_name: str
+) -> tuple[Any, Any]:
     """Build a table schema index from the SQL database.
 
     Args:
@@ -70,7 +72,7 @@ def build_table_schema_index(_sql_database: SQLDatabase, connection_string: str)
     # noop to avoid unused variable warning and autoprint to streamlit
     connection_string = connection_string
 
-    llm_predictor = LLMPredictor(llm=OpenAI(temperature=0, model_name="gpt-3.5-turbo"))
+    llm_predictor = LLMPredictor(llm=OpenAI(temperature=0, model_name=model_name))
     service_context = ServiceContext.from_defaults(llm_predictor=llm_predictor)
 
     # build a vector index from the table schema information
@@ -172,7 +174,7 @@ def main() -> None:
         # Right pane for SQL query input and execution
         if connection:
             open_api_key = st.text_input(
-                "Open API Key",
+                "OpenAI API Key",
                 value=st.secrets.get("open_api_key", st.session_state.get("open_api_key")),
                 type="password",
             )
@@ -189,51 +191,56 @@ def main() -> None:
                 # openai libs access the key via this environment variable
                 os.environ["OPENAI_API_KEY"] = st.session_state.open_api_key
 
-                # Create LLama DB wrapper
-                st.markdown(
-                    (
-                        ":blue[Create DB wrapper."
-                        f" Inspect schemas, tables and views inside **_{dbname}_** DB.]"
-                    )
-                )
-                sql_database = create_llama_db_wrapper(
-                    connection, connection_string=connection_string
+                model_name = st.selectbox(
+                    "Choose OpenAI model", ("gpt-3.5-turbo", "text-davinci-003", "gpt-4")
                 )
 
-                # build llama sqlindex
-                st.write(":blue[Build table schema index.]")
-                table_schema_index, context_builder = build_table_schema_index(
-                    sql_database, connection_string=connection_string
-                )
-
-                query_str = st.text_area("Enter your NL query here:")
-                run_button = st.button("Run")
-
-                # Execute the SQL query when 'Run' button is clicked
-                if run_button or query_str:
-                    index = create_sql_struct_store_index(
-                        sql_database, connection_string=connection_string
-                    )
-
-                    sql_context_container = build_sql_context_container(
-                        context_builder, table_schema_index, query_str
-                    )
-
-                    # st.write(sql_context_container.context_str)
-                    # st.write(sql_context_container.context_dict)
-
-                    st.markdown(":blue[Prepare and execute query...]")
-                    response = query_sql_structure_store(
-                        _index=index,
-                        _sql_context_container=sql_context_container,
-                        connection_string=connection_string,
-                        query_str=query_str,
-                    )
-
+                if model_name:
+                    # Create LLama DB wrapper
                     st.markdown(
-                        f":blue[Generated query:] :green[_{response.extra_info['sql_query']}_]"
+                        (
+                            ":blue[Create DB wrapper."
+                            f" Inspect schemas, tables and views inside **_{dbname}_** DB.]"
+                        )
                     )
-                    st.dataframe(pd.DataFrame(response.extra_info["result"]))
+                    sql_database = create_llama_db_wrapper(
+                        connection, connection_string=connection_string
+                    )
+
+                    # build llama sqlindex
+                    st.write(":blue[Build table schema index.]")
+                    table_schema_index, context_builder = build_table_schema_index(
+                        sql_database, connection_string=connection_string, model_name=model_name
+                    )
+
+                    query_str = st.text_area("Enter your NL query here:")
+                    run_button = st.button("Run")
+
+                    # Execute the SQL query when 'Run' button is clicked
+                    if run_button or query_str:
+                        index = create_sql_struct_store_index(
+                            sql_database, connection_string=connection_string
+                        )
+
+                        sql_context_container = build_sql_context_container(
+                            context_builder, table_schema_index, query_str
+                        )
+
+                        # st.write(sql_context_container.context_str)
+                        # st.write(sql_context_container.context_dict)
+
+                        st.markdown(":blue[Prepare and execute query...]")
+                        response = query_sql_structure_store(
+                            _index=index,
+                            _sql_context_container=sql_context_container,
+                            connection_string=connection_string,
+                            query_str=query_str,
+                        )
+
+                        st.markdown(
+                            f":blue[Generated query:] :green[_{response.extra_info['sql_query']}_]"
+                        )
+                        st.dataframe(pd.DataFrame(response.extra_info["result"]))
 
 
 # Run the Streamlit app
