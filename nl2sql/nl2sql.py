@@ -40,7 +40,7 @@ def create_db_engine(connection_string: str) -> Any:
 
 
 @st.cache_resource
-def create_llama_db_wrapper(_connection: Any, connection_string: str) -> SQLDatabase:
+def create_llama_db_wrapper(_connection: Any, connection_string: str, **kwargs: Any) -> SQLDatabase:
     """Create a SQLDatabase wrapper for the database.
 
     Args:
@@ -50,14 +50,13 @@ def create_llama_db_wrapper(_connection: Any, connection_string: str) -> SQLData
     Returns:
         SQLDatabase: SQLDatabase wrapper for the database
     """
-    # noop
-    connection_string = connection_string
+    connection_string = connection_string  # noqa: F841
     return SQLDatabase(_connection)
 
 
 @st.cache_resource
 def build_table_schema_index(
-    _sql_database: SQLDatabase, connection_string: str, model_name: str
+    _sql_database: SQLDatabase, model_name: str, **kwargs: Any
 ) -> tuple[Any, Any]:
     """Build a table schema index from the SQL database.
 
@@ -68,9 +67,6 @@ def build_table_schema_index(
     Returns:
         tuple[Any, Any]: table_schema_index, context_builder
     """
-    # noop to avoid unused variable warning and autoprint to streamlit
-    connection_string = connection_string
-
     llm_predictor = LLMPredictor(llm=OpenAI(temperature=0, model_name=model_name))
     service_context = ServiceContext.from_defaults(llm_predictor=llm_predictor)
 
@@ -86,7 +82,10 @@ def build_table_schema_index(
 
 @st.cache_resource
 def build_sql_context_container(
-    _context_builder: SQLContextContainerBuilder, _table_schema_index: BaseGPTIndex, query_str: str
+    _context_builder: SQLContextContainerBuilder,
+    _table_schema_index: BaseGPTIndex,
+    query_str: str,
+    **kwargs: Any,
 ) -> SQLContextContainer:
     """Build a SQL context container from the table schema index."""
     _context_builder.query_index_for_context(
@@ -98,7 +97,7 @@ def build_sql_context_container(
 
 @st.cache_resource
 def create_sql_struct_store_index(
-    _sql_database: SQLDatabase, connection_string: str
+    _sql_database: SQLDatabase, **kwargs: Any
 ) -> GPTSQLStructStoreIndex:
     """Create a SQL structure index from the SQL database.
 
@@ -109,9 +108,6 @@ def create_sql_struct_store_index(
     Returns:
         GPTSQLStructStoreIndex: SQL structure index
     """
-    # noop to avoid unused variable warning and autoprint to streamlit
-    connection_string = connection_string
-
     return GPTSQLStructStoreIndex.from_documents([], sql_database=_sql_database)
 
 
@@ -119,8 +115,8 @@ def create_sql_struct_store_index(
 def query_sql_structure_store(
     _index: GPTSQLStructStoreIndex,
     _sql_context_container: SQLContextContainer,
-    connection_string: str,
     query_str: str,
+    **kwargs: Any,
 ) -> Dict[str, Any]:
     """Query the SQL structure index.
 
@@ -129,13 +125,11 @@ def query_sql_structure_store(
         _sql_context_container (SQLContextContainer): SQL context container
         connection_string (str): Placeholder to force cache invalidation
         query_str (str): SQL query string
+        openai_api_key (str): OpenAI API key placehoder for cache invalidation
 
     Returns:
         Dict[str, Any]: Query response
     """
-    # noop to avoid unused variable warning and autoprint to streamlit
-    connection_string = connection_string
-
     response = _index.query(query_str, sql_context_container=_sql_context_container)
 
     return response
@@ -168,34 +162,41 @@ def main() -> int:
             st.session_state.connect_clicked = True
             # change label of connect button to 'Connected'
             connection_string = create_connection_string(host, port, dbname, user, password)
-
             db_engine = create_db_engine(connection_string=connection_string)
 
             # Right pane for SQL query input and execution
             if db_engine:
-                open_api_key = st.text_input(
+                openai_api_key = st.text_input(
                     "OpenAI API Key",
-                    value=st.secrets.get("open_api_key", st.session_state.get("open_api_key", "")),
+                    value=st.secrets.get(
+                        "openai_api_key", st.session_state.get("openai_api_key", "")
+                    ),
                     type="password",
                 )
 
-                btn_open_api_key = st.button("Enter")
+                btn_openai_api_key = st.button("Enter")
 
-                if open_api_key or btn_open_api_key:
-                    session_openapi_key = st.session_state.get("open_api_key")
+                if openai_api_key or btn_openai_api_key:
+                    session_openapi_key = st.session_state.get("openai_api_key")
 
-                    # keep streamlit state that open_api_key had been entered
-                    if not session_openapi_key or session_openapi_key != open_api_key:
-                        st.session_state.open_api_key = open_api_key
+                    # keep streamlit state that openai_api_key had been entered
+                    if not session_openapi_key or session_openapi_key != openai_api_key:
+                        st.session_state.openai_api_key = openai_api_key
 
                     # openai libs access the key via this environment variable
-                    os.environ["OPENAI_API_KEY"] = st.session_state.open_api_key
+                    os.environ["OPENAI_API_KEY"] = st.session_state.openai_api_key
 
                     model_name = st.selectbox(
                         "Choose OpenAI model", ("Choose Model", "gpt-3.5-turbo", "text-davinci-003")
                     )
 
                     if model_name != "Choose Model":
+                        cache_triggers = {
+                            "connection_string": connection_string,
+                            "openai_api_key": openai_api_key,
+                            "model_name": model_name,
+                        }
+
                         # Create LLama DB wrapper
                         st.markdown(
                             (
@@ -204,14 +205,12 @@ def main() -> int:
                             )
                         )
 
-                        sql_database = create_llama_db_wrapper(
-                            db_engine, connection_string=connection_string
-                        )
+                        sql_database = create_llama_db_wrapper(db_engine, **cache_triggers)
 
                         # build llama sqlindex
                         st.markdown(":blue[Build table schema index.]")
                         table_schema_index, context_builder = build_table_schema_index(
-                            sql_database, connection_string=connection_string, model_name=model_name
+                            sql_database, **cache_triggers
                         )
 
                         query_str = st.text_area("Enter your NL query here:")
@@ -219,24 +218,19 @@ def main() -> int:
 
                         # Execute the SQL query when 'Run' button is clicked
                         if run_button or query_str:
-                            index = create_sql_struct_store_index(
-                                sql_database, connection_string=connection_string
-                            )
+                            index = create_sql_struct_store_index(sql_database, **cache_triggers)
 
                             sql_context_container = build_sql_context_container(
-                                context_builder, table_schema_index, query_str
+                                context_builder, table_schema_index, query_str, **cache_triggers
                             )
-
-                            # st.write(sql_context_container.context_str)
-                            # st.write(sql_context_container.context_dict)
 
                             st.markdown(":blue[Prepare and execute query...]")
                             try:
                                 response = query_sql_structure_store(
                                     _index=index,
                                     _sql_context_container=sql_context_container,
-                                    connection_string=connection_string,
                                     query_str=query_str,
+                                    **cache_triggers,
                                 )
                             except Exception as ex:
                                 print(f"Exception type:{type(ex)}")
