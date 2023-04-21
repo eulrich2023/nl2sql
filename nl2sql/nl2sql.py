@@ -33,8 +33,7 @@ def create_connection_string(host: str, port: int, dbname: str, user: str, passw
 def connect_to_database(connection_string: str) -> Optional[sa.engine.Connection]:
     """Connect to the Redshift/Postgres database."""
     try:
-        engine = sa.create_engine(connection_string)
-        return engine.connect()
+        return sa.create_engine(connection_string)
     except Exception as e:
         st.error(f"Error connecting to the database: {e}")
         return None
