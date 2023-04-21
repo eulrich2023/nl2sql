@@ -230,12 +230,22 @@ def main() -> None:
                         # st.write(sql_context_container.context_dict)
 
                         st.markdown(":blue[Prepare and execute query...]")
-                        response = query_sql_structure_store(
-                            _index=index,
-                            _sql_context_container=sql_context_container,
-                            connection_string=connection_string,
-                            query_str=query_str,
-                        )
+                        try:
+                            response = query_sql_structure_store(
+                                _index=index,
+                                _sql_context_container=sql_context_container,
+                                connection_string=connection_string,
+                                query_str=query_str,
+                            )
+                        except Exception as ex:
+                            print(f"Exception type:{type(ex)}")
+                            print(ex)
+                            st.markdown(
+                                ":red[We couldn't generate a valid SQL query. "
+                                "Please try to refine your question with schema, "
+                                "table or column names.]"
+                            )
+                            return
 
                         st.markdown(
                             f":blue[Generated query:] :green[_{response.extra_info['sql_query']}_]"
