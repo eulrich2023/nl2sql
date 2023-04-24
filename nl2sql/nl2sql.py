@@ -218,10 +218,10 @@ def main() -> int:
 
                         # Execute the SQL query when 'Run' button is clicked
                         if run_button or query_str:
-                            if st.session_state.get("query_str") == query_str:
-                                return
-                            else:
-                                st.session_state.query_str = query_str
+                            # if st.session_state.get("query_str") == query_str:
+                            #     return
+                            # else:
+                            #     st.session_state.query_str = query_str
 
                             index = create_sql_struct_store_index(sql_database, **cache_triggers)
 
