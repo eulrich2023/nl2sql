@@ -89,7 +89,7 @@ def build_sql_context_container(
 ) -> SQLContextContainer:
     """Build a SQL context container from the table schema index."""
     _context_builder.query_index_for_context(
-        _table_schema_index, query_str, store_context_str=True, similarity_top_k=3
+        _table_schema_index, query_str, store_context_str=True, similarity_top_k=2
     )
 
     return _context_builder.build_context_container()
