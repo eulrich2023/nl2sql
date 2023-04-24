@@ -217,7 +217,7 @@ def main() -> int:
                         run_button = st.button("Run")
 
                         # Execute the SQL query when 'Run' button is clicked
-                        if run_button or query_str:
+                        if run_button:
                             index = create_sql_struct_store_index(sql_database, **cache_triggers)
 
                             sql_context_container = build_sql_context_container(
