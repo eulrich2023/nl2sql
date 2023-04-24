@@ -1,19 +1,17 @@
-# Natural Language to SQL Query Generator(nl2sql)
-Streamlit App for natural language to SQL query generation. Tested with Postgres and Redshift connections but any SQLAlchemy compatible database should work.
 
+# Natural Language to SQL Query Generator(nl2sql)
+Streamlit App for natural language to SQL query generation. Tested with Postgres and Redshift connections but any SQLAlchemy compatible database should work. You need an OpenAI API key to use this app. You can get one [here](https://platform.openai.com/)
 
 - [Natural Language to SQL Query Generator(nl2sql)](#natural-language-to-sql-query-generatornl2sql)
   - [💻Example Usage](#example-usage)
+    - [Start on localhost:](#start-on-localhost)
   - [🔧Dependencies](#dependencies)
-
 
 ## 💻Example Usage
 
-TLDR: Go to [[WebUI](https://dimitar-petrunov-sagedata-nl2sql-nl2sqlnl2sql-epjv90.streamlit.app/)](https://dimitar-petrunov-sagedata-nl2sql-nl2sqlnl2sql-epjv90.streamlit.app/) to see it in action
+TLDR: Click on the [link](https://dimitar-petrunov-sagedata-nl2sql-nl2sqlnl2sql-epjv90.streamlit.app/) to see it in action.
 
-
-
-Local usage:
+### Start on localhost:
 
 Requires python >= 3.9
 
@@ -40,5 +38,6 @@ Navigate to your streamlit app at http://localhost:8501
 
 
 ## 🔧Dependencies
+You need an OpenAI API key to use this app. You can get one [here](https://platform.openai.com/)
 
-Based on [llama-index](https://github.com/jerryjliu/llama_index) project. Uses [Streamlit](https://streamlit.io/) for the UI.
+Based on the awsome [llama-index](https://github.com/jerryjliu/llama_index) project. Uses [Streamlit](https://streamlit.io/) for the UI.
