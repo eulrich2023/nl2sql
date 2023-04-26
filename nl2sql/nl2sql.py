@@ -124,7 +124,7 @@ def build_sql_context_container(
             _index_to_query,
             query_str,
             store_context_str=True,
-            query_tmpl=PROMPT_TEMPLATE,
+            # query_tmpl=PROMPT_TEMPLATE,
             query_configs=CG_QUERY_CONFIGS,
         )
     else:
@@ -133,7 +133,7 @@ def build_sql_context_container(
             _index_to_query,
             query_str,
             store_context_str=True,
-            query_tmpl=PROMPT_TEMPLATE,
+            # query_tmpl=PROMPT_TEMPLATE,
         )
 
     st.markdown(":blue[Generated context for SQL query preparation:] " f":green[ {context_str} ]")
@@ -198,7 +198,9 @@ def main() -> int:
         password = st.text_input(
             "Password", type="password", value=db_credentials.get("password", "")
         )
-        schema = st.text_input("Schema", value=db_credentials.get("schema", "public"))
+        schema = st.text_input(
+            "Schema", disabled=True, value=db_credentials.get("schema", "public")
+        )
 
         connect_button = st.button("Connect")
 
@@ -267,7 +269,7 @@ def main() -> int:
                         )
 
                         query_str = st.text_area("Enter your NL query:")
-                        dbt_sources_yaml_toggle = st.checkbox("Use DBT sources.yaml")
+                        dbt_sources_yaml_toggle = st.checkbox("Paste DBT sources.yaml")
 
                         dbt_sources_yaml_str = ""
                         if dbt_sources_yaml_toggle:
