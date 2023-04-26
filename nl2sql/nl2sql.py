@@ -24,7 +24,7 @@ from llama_index.indices.struct_store import SQLContextContainerBuilder
 
 # from llama_index.readers import Document
 
-SAMPLE_QUERY = "Show excel tiktok user info"
+SAMPLE_QUERY = "N/A"
 
 PROMPT_TEMPLATE = (
     "Please return the relevant tables (including the full table schema) "
@@ -49,7 +49,7 @@ def create_connection_string(host: str, port: int, dbname: str, user: str, passw
     """Create a db_engine string for the database."""
     quote_plus_password = quote_plus(password)
     quote_plus_user = quote_plus(user)
-    return f"postgresql://{quote_plus_user}:{quote_plus_password }@{host}:{port}/{dbname}"
+    return f"redshift://{quote_plus_user}:{quote_plus_password }@{host}:{port}/{dbname}"
 
 
 # Function to connect to the database
@@ -134,9 +134,12 @@ def build_sql_context_container(
             query_str,
             store_context_str=True,
             # query_tmpl=PROMPT_TEMPLATE,
+            verbose=True,
         )
-
-    st.markdown(":blue[Generated context for SQL query preparation:] " f":green[ {context_str} ]")
+    with st.expander("SQL context"):
+        st.markdown(
+            ":blue[Generated context for SQL query preparation:] " f":green[ {context_str} ]"
+        )
 
     return _context_builder.build_context_container()
 
@@ -252,7 +255,7 @@ def main() -> int:
                             (
                                 ":blue[Create DB wrapper."
                                 f" Inspect tables and views inside "
-                                f":green[**_{dbname}.{schema}_**].]"
+                                f":green[**_{dbname}.{schema}_**]]"
                             )
                         )
 
@@ -260,7 +263,8 @@ def main() -> int:
                             db_engine, **cache_invalidation_triggers
                         )
 
-                        st.write(sql_database._all_tables)
+                        with st.expander(f"Discovered tables in {dbname}.{schema}"):
+                            st.write(sql_database._all_tables)
 
                         # build llama sqlindex
                         st.markdown(":blue[Build table schema index.]")
@@ -304,7 +308,7 @@ def main() -> int:
                                     [table_schema_index, metadata_index],
                                     index_summaries=[
                                         "The table schema generated via database introspection",
-                                        "DBT sources yaml file",
+                                        "DBT sources yaml file content",
                                     ],
                                 )
 
@@ -341,7 +345,7 @@ def main() -> int:
 
                             st.markdown(
                                 ":blue[Generated query:] "
-                                f":green[{response.extra_info['sql_query']}_]"
+                                f":green[_{response.extra_info['sql_query']}_]"
                             )
                             st.dataframe(pd.DataFrame(response.extra_info["result"]))
 
