@@ -3,6 +3,7 @@
 import os
 from typing import Any, Dict
 from urllib.parse import quote_plus
+import urllib.request
 
 import pandas as pd
 import sqlalchemy as sa
@@ -18,7 +19,7 @@ from llama_index import (
 from llama_index.indices.base import BaseGPTIndex
 from llama_index.indices.common.struct_store.schema import SQLContextContainer
 from llama_index.indices.struct_store import SQLContextContainerBuilder
-
+from llama_index import SimpleIndex
 
 # Function to create a db_engine string
 def create_connection_string(host: str, port: int, dbname: str, user: str, password: str) -> str:
@@ -79,6 +80,30 @@ def build_table_schema_index(
 
     return table_schema_index, context_builder
 
+@st.cache_resource
+def build_docs_index(
+        _docs: str, model_name: str, **kwargs: Any
+) -> tuple[Any, Any]:
+    """Build a document schema index from the document file.
+
+    Args:
+        _docs (Document file): Document file from the URL
+        connection_string (str): Placeholder to force cache invalidation
+
+    Returns:
+        tuple[Any, Any]: doc_schema_index, context_builder
+    """
+    llm_predictor = LLMPredictor(llm=OpenAI(temperature=0, model_name=model_name))
+    service_context = ServiceContext.from_defaults(llm_predictor=llm_predictor)
+
+    # build a vector index from the doc information
+    context_builder = ContextContainerBuilder(_docs)
+    doc_schema_index = context_builder.derive_index_from_context(
+        GPTSimpleVectorIndex,
+        service_context=service_context,
+    )
+
+    return doc_schema_index, context_builder
 
 @st.cache_resource
 def build_sql_context_container(
@@ -174,6 +199,10 @@ def main() -> int:
                     type="password",
                 )
 
+                schema_docs_url = st.text_input(
+                    "Schema Documentation URL (optional, dbt yaml accepted)",""
+                )
+
                 btn_openai_api_key = st.button("Enter")
 
                 if openai_api_key or btn_openai_api_key:
@@ -206,6 +235,17 @@ def main() -> int:
                         )
 
                         sql_database = create_llama_db_wrapper(db_engine, **cache_triggers)
+
+                        if schema_docs_url:
+                            # Create Context from Docs
+                            st.markdown(f":blue[Creating DB Docs Context from {schema_docs_url}.]")
+                            # Build context description
+                            with urllib.request.urlopen(schema_docs_url) as response:
+                                docs = response.read().decode('utf-8')
+
+                                docs_index, context_builder = build_docs_index(
+                                    docs, **cache_triggers
+                                )
 
                         # build llama sqlindex
                         st.markdown(":blue[Build table schema index.]")
