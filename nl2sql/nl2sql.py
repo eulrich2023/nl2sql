@@ -190,7 +190,7 @@ def main() -> int:
 
     # Left pane for Redshift db_engine input controls
     with st.sidebar:
-        st.header("Connect to Redshift/Postgres")
+        st.header("Connect to Redshift")
         db_credentials = st.secrets.get("db_credentials", {})
         host = st.text_input("Host", value=db_credentials.get("host", ""))
         port = st.number_input(
