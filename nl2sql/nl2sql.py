@@ -1,7 +1,7 @@
 """Streamlit app generate SQL statements from natural language queries."""
 
 import os
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from urllib.parse import quote_plus
 
 import pandas as pd
@@ -9,15 +9,39 @@ import sqlalchemy as sa
 import streamlit as st
 from langchain import OpenAI
 from llama_index import (
+    Document,
     GPTSimpleVectorIndex,
     GPTSQLStructStoreIndex,
     LLMPredictor,
     ServiceContext,
     SQLDatabase,
 )
+from llama_index.composability import ComposableGraph
 from llama_index.indices.base import BaseGPTIndex
 from llama_index.indices.common.struct_store.schema import SQLContextContainer
+from llama_index.indices.list import GPTListIndex
 from llama_index.indices.struct_store import SQLContextContainerBuilder
+
+# from llama_index.readers import Document
+
+SAMPLE_QUERY = "Show excel tiktok user info"
+
+PROMPT_TEMPLATE = (
+    "Please return the relevant tables (including the full table schema) "
+    "for the following query: {orig_query_str}"
+)
+
+PROMPT_TEMPLATE_IMPL = PROMPT_TEMPLATE.format(orig_query_str=SAMPLE_QUERY)
+
+
+CG_QUERY_CONFIGS = [
+    {
+        "index_struct_type": "simple_dict",
+        "query_mode": "default",
+        "query_kwargs": {"similarity_top_k": 1, "verbose": True},
+    },
+    {"index_struct_type": "list", "query_mode": "default", "query_kwargs": {"verbose": True}},
+]
 
 
 # Function to create a db_engine string
@@ -40,18 +64,19 @@ def create_db_engine(connection_string: str) -> Any:
 
 
 @st.cache_resource
-def create_llama_db_wrapper(_connection: Any, connection_string: str, **kwargs: Any) -> SQLDatabase:
+def create_llama_db_wrapper(
+    _connection: Any, schema: Optional[str] = None, **kwargs: Any
+) -> SQLDatabase:
     """Create a SQLDatabase wrapper for the database.
 
     Args:
         _connection (sa.engine.db_engine): db_engine
-        connection_string (str): Placeholder to force cache invalidation
+        schema (Optional[str], optional): Schema name. Defaults to None.
 
     Returns:
         SQLDatabase: SQLDatabase wrapper for the database
     """
-    connection_string = connection_string  # noqa: F841
-    return SQLDatabase(_connection)
+    return SQLDatabase(_connection, schema=schema)
 
 
 @st.cache_resource
@@ -62,7 +87,7 @@ def build_table_schema_index(
 
     Args:
         _sql_database (SQLDatabase): SQL database
-        connection_string (str): Placeholder to force cache invalidation
+        model_name (str): Model name
 
     Returns:
         tuple[Any, Any]: table_schema_index, context_builder
@@ -83,27 +108,48 @@ def build_table_schema_index(
 @st.cache_resource
 def build_sql_context_container(
     _context_builder: SQLContextContainerBuilder,
-    _table_schema_index: BaseGPTIndex,
+    _index_to_query: BaseGPTIndex,
     query_str: str,
     **kwargs: Any,
 ) -> SQLContextContainer:
     """Build a SQL context container from the table schema index."""
-    _context_builder.query_index_for_context(
-        _table_schema_index, query_str, store_context_str=True, similarity_top_k=2
-    )
+    # query_str
+    # kwargs
+    if kwargs.get("dbt_sources_yaml_toggle"):
+        st.markdown(
+            ":blue[Query Composable Graph index of DBT sources.yaml "
+            "index and table schema index]"
+        )
+        context_str = _context_builder.query_index_for_context(
+            _index_to_query,
+            query_str,
+            store_context_str=True,
+            query_tmpl=PROMPT_TEMPLATE,
+            query_configs=CG_QUERY_CONFIGS,
+        )
+    else:
+        st.markdown(":blue[Query table schema index only (no DBT index)]")
+        context_str = _context_builder.query_index_for_context(
+            _index_to_query,
+            query_str,
+            store_context_str=True,
+            query_tmpl=PROMPT_TEMPLATE,
+        )
+
+    st.markdown(":blue[Generated context for SQL query preparation:] " f":green[ {context_str} ]")
 
     return _context_builder.build_context_container()
 
 
 @st.cache_resource
 def create_sql_struct_store_index(
-    _sql_database: SQLDatabase, **kwargs: Any
+    _sql_database: SQLDatabase, connection_string: str
 ) -> GPTSQLStructStoreIndex:
     """Create a SQL structure index from the SQL database.
 
     Args:
         _sql_database (SQLDatabase): SQL database
-        connection_string (str): Placeholder to force cache invalidation
+        connection_string (str): db_engine connection string for cache invalidation
 
     Returns:
         GPTSQLStructStoreIndex: SQL structure index
@@ -123,7 +169,6 @@ def query_sql_structure_store(
     Args:
         _index (GPTSQLStructStoreIndex): SQL structure index
         _sql_context_container (SQLContextContainer): SQL context container
-        connection_string (str): Placeholder to force cache invalidation
         query_str (str): SQL query string
         openai_api_key (str): OpenAI API key placehoder for cache invalidation
 
@@ -153,6 +198,7 @@ def main() -> int:
         password = st.text_input(
             "Password", type="password", value=db_credentials.get("password", "")
         )
+        schema = st.text_input("Schema", value=db_credentials.get("schema", "public"))
 
         connect_button = st.button("Connect")
 
@@ -187,75 +233,119 @@ def main() -> int:
                     os.environ["OPENAI_API_KEY"] = st.session_state.openai_api_key
 
                     model_name = st.selectbox(
-                        "Choose OpenAI model", ("Choose Model", "gpt-3.5-turbo", "text-davinci-003")
+                        "Choose OpenAI model",
+                        ("_Choose a model_", "gpt-3.5-turbo", "text-davinci-003"),
                     )
 
-                    if model_name != "Choose Model":
-                        cache_triggers = {
+                    if not model_name.startswith("_"):
+                        cache_invalidation_triggers = {
                             "connection_string": connection_string,
                             "openai_api_key": openai_api_key,
                             "model_name": model_name,
+                            "schema": str(schema),
                         }
 
                         # Create LLama DB wrapper
                         st.markdown(
                             (
                                 ":blue[Create DB wrapper."
-                                f" Inspect schemas, tables and views inside **_{dbname}_** DB.]"
+                                f" Inspect tables and views inside "
+                                f":green[**_{dbname}.{schema}_**].]"
                             )
                         )
 
-                        sql_database = create_llama_db_wrapper(db_engine, **cache_triggers)
+                        sql_database = create_llama_db_wrapper(
+                            db_engine, **cache_invalidation_triggers
+                        )
+
+                        st.write(sql_database._all_tables)
 
                         # build llama sqlindex
                         st.markdown(":blue[Build table schema index.]")
                         table_schema_index, context_builder = build_table_schema_index(
-                            sql_database, **cache_triggers
+                            sql_database, **cache_invalidation_triggers
                         )
 
-                        query_str = st.text_area("Enter your NL query here:")
-                        run_button = st.button("Run")
+                        query_str = st.text_area("Enter your NL query:")
+                        dbt_sources_yaml_toggle = st.checkbox("Use DBT sources.yaml")
+
+                        dbt_sources_yaml_str = ""
+                        if dbt_sources_yaml_toggle:
+                            dbt_sources_yaml_str = st.text_area("Paste DBT sources.yaml:")
+
+                        st.button("Run")
+
+                        # query_str = SAMPLE_QUERY
 
                         # Execute the SQL query when 'Run' button is clicked
-                        if run_button or query_str:
-                            # if st.session_state.get("query_str") == query_str:
-                            #     return
-                            # else:
-                            #     st.session_state.query_str = query_str
+                        if (query_str and not dbt_sources_yaml_toggle) or (
+                            query_str and dbt_sources_yaml_toggle and dbt_sources_yaml_str
+                        ):
+                            cache_invalidation_triggers[
+                                "dbt_sources_yaml_toggle"
+                            ] = dbt_sources_yaml_toggle
+                            cache_invalidation_triggers[
+                                "dbt_sources_yaml_str"
+                            ] = dbt_sources_yaml_str
 
-                            index = create_sql_struct_store_index(sql_database, **cache_triggers)
+                            index_to_query = table_schema_index
 
+                            if dbt_sources_yaml_toggle:
+                                metadata_index = GPTListIndex.from_documents(
+                                    [Document(dbt_sources_yaml_str)]
+                                )
+
+                                # build ComposableGraph based on table schema index and
+                                # DBT sources yaml index
+                                index_to_query = ComposableGraph.from_indices(
+                                    GPTListIndex,
+                                    [table_schema_index, metadata_index],
+                                    index_summaries=[
+                                        "The table schema generated via database introspection",
+                                        "DBT sources yaml file",
+                                    ],
+                                )
+
+                            # st.write(query_str)
+
+                            # cached resource
                             sql_context_container = build_sql_context_container(
-                                context_builder, table_schema_index, query_str, **cache_triggers
+                                context_builder,
+                                index_to_query,
+                                query_str,
+                                **cache_invalidation_triggers,
                             )
 
                             st.markdown(":blue[Prepare and execute query...]")
                             try:
+                                # cached resource
+                                index = create_sql_struct_store_index(
+                                    sql_database, connection_string
+                                )
+                                # cached resource
                                 response = query_sql_structure_store(
                                     _index=index,
                                     _sql_context_container=sql_context_container,
                                     query_str=query_str,
-                                    **cache_triggers,
+                                    **cache_invalidation_triggers,
                                 )
                             except Exception as ex:
-                                print(f"Exception type:{type(ex)}")
-                                print(ex)
                                 st.markdown(
                                     ":red[We couldn't generate a valid SQL query. "
                                     "Please try to refine your question with schema, "
-                                    "table or column names.]"
+                                    f"table or column names. Exception info:\n{ex}]"
                                 )
                                 return
 
                             st.markdown(
                                 ":blue[Generated query:] "
-                                f":green[_{response.extra_info['sql_query']}_]"
+                                f":green[{response.extra_info['sql_query']}_]"
                             )
                             st.dataframe(pd.DataFrame(response.extra_info["result"]))
 
     except Exception as ex:
         st.markdown(f":red[{ex}]")
-        return 1
+        raise ex
 
     return 0
 
