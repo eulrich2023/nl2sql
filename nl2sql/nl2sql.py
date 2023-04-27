@@ -21,27 +21,35 @@ from llama_index.indices.base import BaseGPTIndex
 from llama_index.indices.common.struct_store.schema import SQLContextContainer
 from llama_index.indices.list import GPTListIndex
 from llama_index.indices.struct_store import SQLContextContainerBuilder
+from llama_index.prompts.prompts import TextToSQLPrompt
 
 # from llama_index.readers import Document
+RS_TEXT_TO_SQL_TMPL = """You are an AWS Redshift expert. Given an input question,
+first create a syntactically correct {dialect} query to run,
+then look at the results of the query and return the answer to the input question.
+Unless the user specifies in the question a specific number of examples
+to obtain, query for at most 50 results. You can order the results to return the
+most informative data in the database.
+You must query only the columns that are needed to answer the question.
+Wrap each column name in double quotes (") to denote them as delimited identifiers.
+Pay attention to use only the column names you can see in the tables below.
+Be careful to not query for columns that do not exist.
+Also, pay attention to which column is in which table.
 
-SAMPLE_QUERY = "N/A"
+Use the following format:
 
-PROMPT_TEMPLATE = (
-    "Please return the relevant tables (including the full table schema) "
-    "for the following query: {orig_query_str}"
-)
+Question: "Question here"
+SQLQuery: "SQL Query to run"
+SQLResult: "Result of the SQLQuery"
+Answer: "Final answer here"
 
-PROMPT_TEMPLATE_IMPL = PROMPT_TEMPLATE.format(orig_query_str=SAMPLE_QUERY)
+Only use the folowing tables listed below:
+{schema}
 
+Question: {query_str}
+SQLQuery: """
 
-CG_QUERY_CONFIGS = [
-    {
-        "index_struct_type": "simple_dict",
-        "query_mode": "default",
-        "query_kwargs": {"similarity_top_k": 1, "verbose": True},
-    },
-    {"index_struct_type": "list", "query_mode": "default", "query_kwargs": {"verbose": True}},
-]
+RS_TEXT_TO_SQL_PROMPT = TextToSQLPrompt(RS_TEXT_TO_SQL_TMPL, stop_token="\nSQLResult:")
 
 
 # Function to create a db_engine string
@@ -124,8 +132,18 @@ def build_sql_context_container(
             _index_to_query,
             query_str,
             store_context_str=True,
-            # query_tmpl=PROMPT_TEMPLATE,
-            query_configs=CG_QUERY_CONFIGS,
+            query_configs=[
+                {
+                    "index_struct_type": "simple_dict",
+                    "query_mode": "default",
+                    "query_kwargs": {"similarity_top_k": 1, "verbose": True},
+                },
+                {
+                    "index_struct_type": "list",
+                    "query_mode": "default",
+                    "query_kwargs": {"verbose": True},
+                },
+            ],
         )
     else:
         st.markdown(":blue[Query table schema index only (no DBT index)]")
@@ -133,8 +151,8 @@ def build_sql_context_container(
             _index_to_query,
             query_str,
             store_context_str=True,
-            # query_tmpl=PROMPT_TEMPLATE,
             verbose=True,
+            similarity_top_k=1,
         )
     with st.expander("SQL context"):
         st.markdown(
@@ -178,7 +196,11 @@ def query_sql_structure_store(
     Returns:
         Dict[str, Any]: Query response
     """
-    response = _index.query(query_str, sql_context_container=_sql_context_container)
+    response = _index.query(
+        query_str,
+        text_to_sql_prompt=RS_TEXT_TO_SQL_PROMPT,
+        sql_context_container=_sql_context_container,
+    )
 
     return response
 
@@ -281,8 +303,6 @@ def main() -> int:
 
                         st.button("Run")
 
-                        # query_str = SAMPLE_QUERY
-
                         # Execute the SQL query when 'Run' button is clicked
                         if (query_str and not dbt_sources_yaml_toggle) or (
                             query_str and dbt_sources_yaml_toggle and dbt_sources_yaml_str
@@ -307,8 +327,8 @@ def main() -> int:
                                     GPTListIndex,
                                     [table_schema_index, metadata_index],
                                     index_summaries=[
-                                        "The table schema generated via database introspection",
-                                        "DBT sources yaml file content",
+                                        "Tables' schemas generated via database introspection",
+                                        "DBT sources yaml",
                                     ],
                                 )
 
