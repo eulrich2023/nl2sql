@@ -209,9 +209,16 @@ def main() -> int:
     """Start the streamlit app."""
     st.set_page_config(layout="wide")
     st.title("Natural Language to SQL Query Executor")
+    st.markdown(
+        "_SageData has crafted this proof-of-concept app to demonstrate the power of large "
+        "language models(LLMS) in rapidly and effectively extracting valuable insights from "
+        "your data. We greatly appreciate your thoughts and suggestions. "
+        "Visit us at www.sagedata.net._"
+    )
 
     # Left pane for Redshift db_engine input controls
     with st.sidebar:
+        st.image("docs/img/sagedata_logo.png", width=230)
         st.header("Connect to Redshift")
         db_credentials = st.secrets.get("db_credentials", {})
         host = st.text_input("Host", value=db_credentials.get("host", ""))
@@ -295,11 +302,13 @@ def main() -> int:
                         )
 
                         query_str = st.text_area("Enter your NL query:")
-                        dbt_sources_yaml_toggle = st.checkbox("Paste DBT sources.yaml")
+                        dbt_sources_yaml_toggle = st.checkbox(
+                            "Add DBT sources.yaml for additional context"
+                        )
 
                         dbt_sources_yaml_str = ""
                         if dbt_sources_yaml_toggle:
-                            dbt_sources_yaml_str = st.text_area("Paste DBT sources.yaml:")
+                            dbt_sources_yaml_str = st.text_area("Paste your DBT sources.yaml:")
 
                         st.button("Run")
 
@@ -331,8 +340,6 @@ def main() -> int:
                                         "DBT sources yaml",
                                     ],
                                 )
-
-                            # st.write(query_str)
 
                             # cached resource
                             sql_context_container = build_sql_context_container(
