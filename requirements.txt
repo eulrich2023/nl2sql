@@ -1,6 +1,6 @@
 streamlit==1.21.0
 llama-index==0.5.12
-sqlalchemy-redshift
+sqlalchemy-redshift==0.8.14
 pandas==1.4.2
 langchain==0.0.144
-psycopg2
+psycopg2-binary==^2.9.6
