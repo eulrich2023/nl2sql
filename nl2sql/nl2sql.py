@@ -4,14 +4,15 @@ import os
 from typing import Any, Dict, Optional
 from urllib.parse import quote_plus
 
+import chromadb
 import pandas as pd
 import sqlalchemy as sa
 import streamlit as st
 from langchain import OpenAI
 from llama_index import (
     Document,
-    GPTSimpleVectorIndex,
     GPTSQLStructStoreIndex,
+    GPTVectorStoreIndex,
     LLMPredictor,
     ServiceContext,
     SQLDatabase,
@@ -22,6 +23,8 @@ from llama_index.indices.common.struct_store.schema import SQLContextContainer
 from llama_index.indices.list import GPTListIndex
 from llama_index.indices.struct_store import SQLContextContainerBuilder
 from llama_index.prompts.prompts import TextToSQLPrompt
+from llama_index.storage.storage_context import StorageContext
+from llama_index.vector_stores import ChromaVectorStore
 
 # from llama_index.readers import Document
 RS_TEXT_TO_SQL_TMPL = """You are an AWS Redshift expert. Given an input question,
@@ -103,11 +106,18 @@ def build_table_schema_index(
     llm_predictor = LLMPredictor(llm=OpenAI(temperature=0, model_name=model_name))
     service_context = ServiceContext.from_defaults(llm_predictor=llm_predictor)
 
+    # Use ChromaDB to store the vectors for table schemas
+    chroma_client = chromadb.Client()
+    chroma_collection = chroma_client.create_collection("table_schema")
+    vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
+    storage_context = StorageContext.from_defaults(vector_store=vector_store)
+
     # build a vector index from the table schema information
     context_builder = SQLContextContainerBuilder(_sql_database)
     table_schema_index = context_builder.derive_index_from_context(
-        GPTSimpleVectorIndex,
+        GPTVectorStoreIndex,
         service_context=service_context,
+        storage_context=storage_context,
     )
 
     return table_schema_index, context_builder
@@ -124,11 +134,7 @@ def build_sql_context_container(
     # query_str
     # kwargs
     if kwargs.get("dbt_sources_yaml_toggle"):
-        st.markdown(
-            ":blue[Query Composable Graph index of DBT sources.yaml "
-            "index and table schema index]"
-        )
-        context_str = _context_builder.query_index_for_context(
+        _context_builder.query_index_for_context(
             _index_to_query,
             query_str,
             store_context_str=True,
@@ -146,17 +152,8 @@ def build_sql_context_container(
             ],
         )
     else:
-        st.markdown(":blue[Query table schema index only (no DBT index)]")
-        context_str = _context_builder.query_index_for_context(
-            _index_to_query,
-            query_str,
-            store_context_str=True,
-            verbose=True,
-            similarity_top_k=1,
-        )
-    with st.expander("SQL context"):
-        st.markdown(
-            ":blue[Generated context for SQL query preparation:] " f":green[ {context_str} ]"
+        _context_builder.query_index_for_context(
+            _index_to_query, query_str, store_context_str=True, verbose=True
         )
 
     return _context_builder.build_context_container()
@@ -196,11 +193,10 @@ def query_sql_structure_store(
     Returns:
         Dict[str, Any]: Query response
     """
-    response = _index.query(
-        query_str,
-        text_to_sql_prompt=RS_TEXT_TO_SQL_PROMPT,
+    response = _index.as_query_engine(
+        query_mode="nl",
         sql_context_container=_sql_context_container,
-    )
+    ).query(query_str)
 
     return response
 
@@ -210,7 +206,7 @@ def main() -> int:
     st.set_page_config(layout="wide")
     st.title("Natural Language to SQL Query Executor")
     st.markdown(
-        "_SageData has crafted this proof-of-concept app to demonstrate the power of large "
+        "_A proof-of-concept app that demonstrate the power of large "
         "language models(LLMS) in rapidly and effectively extracting valuable insights from "
         "your data. We greatly appreciate your thoughts and suggestions. "
         "Visit us at www.sagedata.net._"
@@ -341,6 +337,16 @@ def main() -> int:
                                     ],
                                 )
 
+                                st.markdown(
+                                    ":blue[Query Composable Graph index of DBT sources.yaml "
+                                    "index and table schema index]"
+                                )
+                            else:
+                                st.markdown(
+                                    ":blue[Query table schema index generated "
+                                    "via database introspection]"
+                                )
+
                             # cached resource
                             sql_context_container = build_sql_context_container(
                                 context_builder,
@@ -349,6 +355,13 @@ def main() -> int:
                                 **cache_invalidation_triggers,
                             )
 
+                            with st.expander("SQL context"):
+                                st.markdown(
+                                    ":blue[Generated context for SQL query preparation:] "
+                                    f":green[ {sql_context_container.context_str} ]"
+                                )
+
+                            return
                             st.markdown(":blue[Prepare and execute query...]")
                             try:
                                 # cached resource
