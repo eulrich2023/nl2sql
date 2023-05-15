@@ -4,7 +4,7 @@ from typing import Sequence, Type, TypeVar
 from langchain import LLMChain, OpenAI, PromptTemplate
 
 REQUST_SUMMARY_TEMPLATE = """
-Given a sequence of requests, create a condensed request based on the last one.
+Given a sequence of requests, create a condensed request based on the last one and last one only.
 
 Begin!
 
