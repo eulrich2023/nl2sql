@@ -321,6 +321,7 @@ def main() -> int:
                             st.session_state["query_history"] = query_history
 
                         query_str = st.text_input("Enter your NL query:")
+
                         dbt_sources_yaml_toggle = st.checkbox(
                             "Add DBT sources.yaml for additional context"
                         )
@@ -329,13 +330,15 @@ def main() -> int:
                         if dbt_sources_yaml_toggle:
                             dbt_sources_yaml_str = st.text_area("Paste your DBT sources.yaml:")
 
-                        st.button("Run")
+                        LOGGER.info("query_str: %s", query_str)
+                        LOGGER.info("dbt_sources_yaml_toggle: %d", dbt_sources_yaml_toggle)
 
                         # Execute the SQL query when 'Run' button is clicked
                         if (query_str and not dbt_sources_yaml_toggle) or (
                             query_str and dbt_sources_yaml_toggle and dbt_sources_yaml_str
                         ):
                             query_history.append({"user": query_str})
+
                             cache_invalidation_triggers[
                                 "dbt_sources_yaml_toggle"
                             ] = dbt_sources_yaml_toggle
