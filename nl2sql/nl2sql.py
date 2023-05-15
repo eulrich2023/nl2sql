@@ -27,7 +27,7 @@ from llama_index.indices.struct_store import SQLContextContainerBuilder
 from llama_index.prompts.prompts import TextToSQLPrompt
 from llama_index.storage.storage_context import StorageContext
 from llama_index.vector_stores import ChromaVectorStore
-from req_summary import RequestsSummaryBuilder
+from rsb import RequestsSummaryBuilder
 from streamlit.components.v1 import html
 from streamlit.logger import get_logger
 from streamlit_chat import message
@@ -422,7 +422,7 @@ def main() -> int:
         df = pd.DataFrame(response.extra_info["result"])
         st.dataframe(df)
 
-        st.markdown(":blue[Generate a plot...]")
+        st.markdown(":blue[Plotting the data. Please wait...]")
 
         html_plot_js = JSCodePlotGenerator(sql_query=sql_query, data=df).generate_plot()
 
