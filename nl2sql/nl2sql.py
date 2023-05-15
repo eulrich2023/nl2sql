@@ -161,7 +161,10 @@ def build_sql_context_container(
 
 @st.cache_resource
 def create_sql_struct_store_index(
-    _sql_database: SQLDatabase, connection_string: str
+    _sql_database: SQLDatabase,
+    _sql_context_container: SQLContextContainer,
+    connection_string: str,
+    query_str: str,
 ) -> GPTSQLStructStoreIndex:
     """Create a SQL structure index from the SQL database.
 
@@ -172,13 +175,14 @@ def create_sql_struct_store_index(
     Returns:
         GPTSQLStructStoreIndex: SQL structure index
     """
-    return GPTSQLStructStoreIndex.from_documents([], sql_database=_sql_database)
+    return GPTSQLStructStoreIndex(
+        sql_database=_sql_database, sql_context_container=_sql_context_container
+    )
 
 
 @st.cache_data(ttl=60)
 def query_sql_structure_store(
     _index: GPTSQLStructStoreIndex,
-    _sql_context_container: SQLContextContainer,
     query_str: str,
     **kwargs: Any,
 ) -> Dict[str, Any]:
@@ -195,7 +199,6 @@ def query_sql_structure_store(
     """
     response = _index.as_query_engine(
         query_mode="nl",
-        sql_context_container=_sql_context_container,
     ).query(query_str)
 
     return response
@@ -366,12 +369,14 @@ def main() -> int:
                             try:
                                 # cached resource
                                 index = create_sql_struct_store_index(
-                                    sql_database, connection_string
+                                    sql_database,
+                                    _sql_context_container=sql_context_container,
+                                    connection_string=connection_string,
+                                    query_str=query_str,
                                 )
                                 # cached resource
                                 response = query_sql_structure_store(
                                     _index=index,
-                                    _sql_context_container=sql_context_container,
                                     query_str=query_str,
                                     **cache_invalidation_triggers,
                                 )
