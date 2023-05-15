@@ -9,6 +9,7 @@ import chromadb
 import pandas as pd
 import sqlalchemy as sa
 import streamlit as st
+from js_code_plot_generator import JSCodePlotGenerator
 from langchain import OpenAI
 from llama_index import (
     Document,
@@ -26,7 +27,8 @@ from llama_index.indices.struct_store import SQLContextContainerBuilder
 from llama_index.prompts.prompts import TextToSQLPrompt
 from llama_index.storage.storage_context import StorageContext
 from llama_index.vector_stores import ChromaVectorStore
-from requests_summary import SummaryBuilder
+from requests_summary import RequestsSummaryBuilder
+from streamlit.components.v1 import html
 from streamlit.logger import get_logger
 from streamlit_chat import message
 
@@ -302,7 +304,7 @@ def main() -> int:
             st.write(sql_database._all_tables)
 
         # build llama sqlindex
-        st.markdown(":blue[Introspect the database and build a table-schema index.]")
+        st.markdown(":blue[Build a table-schema index.]")
         table_schema_index, context_builder = build_table_schema_index(
             sql_database, **cache_invalidation_triggers
         )
@@ -327,18 +329,17 @@ def main() -> int:
         if dbt_sources_yaml_toggle:
             st.text_area("Paste your DBT sources.yaml:", key="dbt_sources_yaml_str")
 
+        yaml_cfg_is_wrong = st.session_state.get(
+            "dbt_sources_yaml_toggle"
+        ) and not st.session_state.get("dbt_sources_yaml_str")
+
         run = st.button(
             "Run",
-            disabled=not st.session_state.get("query_str"),
+            disabled=not st.session_state.get("query_str") or yaml_cfg_is_wrong,
             on_click=lambda: query_history.append({"user": st.session_state.get("query_str")}),
         )
 
         if not run:
-            return
-
-        if st.session_state.get("dbt_sources_yaml_toggle") and not st.session_state.get(
-            "dbt_sources_yaml_str"
-        ):
             return
 
         dbt_sources_yaml_toggle = st.session_state.get("dbt_sources_yaml_toggle", False)
@@ -371,10 +372,11 @@ def main() -> int:
             st.markdown(":blue[Query the table-schema index]")
 
         # return a condensed summary for the last query
-        condensed_query_str = SummaryBuilder.build_summary(map(lambda x: x["user"], query_history))
+        condensed_query_str = RequestsSummaryBuilder.build_summary(
+            map(lambda x: x["user"], query_history)
+        )
+        # TODO: add the condensed query to the history of user messages
         LOGGER.info("Generated condensed query: %s", condensed_query_str)
-
-        condensed_query_str = condensed_query_str.strip()
 
         # cached resource
         sql_context_container = build_sql_context_container(
@@ -417,7 +419,17 @@ def main() -> int:
         sql_query = response.extra_info["sql_query"]
         query_history[-1]["generated"] = response.extra_info["sql_query"]
         message(sql_query, key=str(f"{len(query_history)}_sql"))
-        st.dataframe(pd.DataFrame(response.extra_info["result"]))
+        df = pd.DataFrame(response.extra_info["result"])
+        st.dataframe(df)
+
+        st.markdown(":blue[Generate a plot...]")
+
+        html_plot_js = JSCodePlotGenerator(sql_query=sql_query, data=df).generate_plot()
+
+        with st.expander("JS Plot Code"):
+            st.code(html_plot_js, language="javascript")
+
+        html(html_plot_js, scrolling=True, height=500)
     except Exception as ex:
         st.markdown(f":red[{ex}]")
         raise ex
