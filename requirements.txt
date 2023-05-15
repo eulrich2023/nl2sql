@@ -3,3 +3,4 @@ llama-index==0.6.5
 sqlalchemy-redshift==0.8.14
 pandas==1.4.2
 psycopg2-binary==2.9.6
+chromadb==0.3.2
