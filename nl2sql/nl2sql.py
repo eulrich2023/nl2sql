@@ -27,7 +27,10 @@ from llama_index.prompts.prompts import TextToSQLPrompt
 from llama_index.storage.storage_context import StorageContext
 from llama_index.vector_stores import ChromaVectorStore
 from requests_summary import SummaryBuilder
+from streamlit.logger import get_logger
 from streamlit_chat import message
+
+LOGGER = get_logger(__name__)
 
 # from llama_index.readers import Document
 RS_TEXT_TO_SQL_TMPL = """You are an AWS Redshift expert. Given an input question,
@@ -372,7 +375,7 @@ def main() -> int:
                             condensed_query_str = SummaryBuilder.build_summary(
                                 map(lambda x: x["user"], query_history)
                             )
-                            print("Generated condensed query: ", condensed_query_str)
+                            LOGGER.info("Generated condensed query: ", condensed_query_str)
 
                             condensed_query_str = condensed_query_str.strip()
 
