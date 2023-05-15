@@ -206,7 +206,7 @@ def main() -> int:
     st.set_page_config(layout="wide")
     st.title("Natural Language to SQL Query Executor")
     st.markdown(
-        "_A proof-of-concept app that demonstrate the power of large "
+        "_A proof-of-concept to demonstrate the power of large "
         "language models(LLMS) in rapidly and effectively extracting valuable insights from "
         "your data. We greatly appreciate your thoughts and suggestions. "
         "Visit us at www.sagedata.net._"
@@ -361,7 +361,7 @@ def main() -> int:
                                     f":green[ {sql_context_container.context_str} ]"
                                 )
 
-                            return
+                            # return
                             st.markdown(":blue[Prepare and execute query...]")
                             try:
                                 # cached resource
