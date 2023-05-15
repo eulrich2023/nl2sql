@@ -375,7 +375,7 @@ def main() -> int:
                             condensed_query_str = SummaryBuilder.build_summary(
                                 map(lambda x: x["user"], query_history)
                             )
-                            LOGGER.info("Generated condensed query: ", condensed_query_str)
+                            LOGGER.info("Generated condensed query: %s", condensed_query_str)
 
                             condensed_query_str = condensed_query_str.strip()
 
