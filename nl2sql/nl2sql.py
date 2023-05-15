@@ -1,5 +1,6 @@
 """Streamlit app generate SQL statements from natural language queries."""
 
+import collections
 import os
 from typing import Any, Dict, Optional
 from urllib.parse import quote_plus
@@ -25,6 +26,8 @@ from llama_index.indices.struct_store import SQLContextContainerBuilder
 from llama_index.prompts.prompts import TextToSQLPrompt
 from llama_index.storage.storage_context import StorageContext
 from llama_index.vector_stores import ChromaVectorStore
+from requests_summary import SummaryBuilder
+from streamlit_chat import message
 
 # from llama_index.readers import Document
 RS_TEXT_TO_SQL_TMPL = """You are an AWS Redshift expert. Given an input question,
@@ -300,7 +303,21 @@ def main() -> int:
                             sql_database, **cache_invalidation_triggers
                         )
 
-                        query_str = st.text_area("Enter your NL query:")
+                        query_history = st.session_state.get(
+                            "query_history", collections.deque(maxlen=10)
+                        )
+
+                        if query_history:
+                            for idx, msg in enumerate(query_history):
+                                message(msg["user"], is_user=True, key=str(f"{idx}_user"))
+                                if msg.get("generated"):
+                                    message(
+                                        msg.get("generated"), is_user=False, key=str(f"{idx}_sql")
+                                    )
+                        else:
+                            st.session_state["query_history"] = query_history
+
+                        query_str = st.text_input("Enter your NL query:")
                         dbt_sources_yaml_toggle = st.checkbox(
                             "Add DBT sources.yaml for additional context"
                         )
@@ -315,6 +332,7 @@ def main() -> int:
                         if (query_str and not dbt_sources_yaml_toggle) or (
                             query_str and dbt_sources_yaml_toggle and dbt_sources_yaml_str
                         ):
+                            query_history.append({"user": query_str})
                             cache_invalidation_triggers[
                                 "dbt_sources_yaml_toggle"
                             ] = dbt_sources_yaml_toggle
@@ -350,11 +368,19 @@ def main() -> int:
                                     "via database introspection]"
                                 )
 
+                            # return a condensed summary for the last query
+                            condensed_query_str = SummaryBuilder.build_summary(
+                                map(lambda x: x["user"], query_history)
+                            )
+                            print("Generated condensed query: ", condensed_query_str)
+
+                            condensed_query_str = condensed_query_str.strip()
+
                             # cached resource
                             sql_context_container = build_sql_context_container(
                                 context_builder,
                                 index_to_query,
-                                query_str,
+                                condensed_query_str,
                                 **cache_invalidation_triggers,
                             )
 
@@ -372,12 +398,12 @@ def main() -> int:
                                     sql_database,
                                     _sql_context_container=sql_context_container,
                                     connection_string=connection_string,
-                                    query_str=query_str,
+                                    query_str=condensed_query_str,
                                 )
                                 # cached resource
                                 response = query_sql_structure_store(
                                     _index=index,
-                                    query_str=query_str,
+                                    query_str=condensed_query_str,
                                     **cache_invalidation_triggers,
                                 )
                             except Exception as ex:
@@ -388,10 +414,14 @@ def main() -> int:
                                 )
                                 return
 
-                            st.markdown(
-                                ":blue[Generated query:] "
-                                f":green[_{response.extra_info['sql_query']}_]"
-                            )
+                            # st.markdown(
+                            #     ":blue[Generated query:] "
+                            #     f":green[_{response.extra_info['sql_query']}_]"
+                            # )
+
+                            sql_query = response.extra_info["sql_query"]
+                            query_history[-1]["generated"] = response.extra_info["sql_query"]
+                            message(sql_query, key=str(f"{len(query_history)}_sql"))
                             st.dataframe(pd.DataFrame(response.extra_info["result"]))
 
     except Exception as ex:

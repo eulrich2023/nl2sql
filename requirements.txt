@@ -5,3 +5,4 @@ sqlalchemy-redshift==0.8.14
 pandas==1.4.2
 psycopg2-binary==2.9.6
 chromadb==0.3.2
+streamlit-chat==0.0.2.2
