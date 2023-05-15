@@ -27,7 +27,7 @@ T = TypeVar("T", bound="JSCodePlotGenerator")
 class JSCodePlotGenerator(object):
     """Class to generate JS plots for the NL2SQL project."""
 
-    def __init__(self: Type[T], sql_query: str, data: pd.DataFrame) -> Type[T]:
+    def __init__(self: Type[T], sql_query: str, data: pd.DataFrame) -> None:
         """Initialize the plot generator.
 
         Args:
