@@ -243,204 +243,181 @@ def main() -> int:
 
     try:
         # Connect to DB when 'Connect' is clicked
-        if connect_button or st.session_state.get("connect_clicked"):
-            st.session_state.connect_clicked = True
-            # change label of connect button to 'Connected'
-            connection_string = create_connection_string(host, port, dbname, user, password)
-            db_engine = create_db_engine(connection_string=connection_string)
+        if not connect_button and not st.session_state.get("connect_clicked"):
+            return
 
-            # Right pane for SQL query input and execution
-            if db_engine:
-                openai_api_key = st.text_input(
-                    "OpenAI API Key",
-                    value=st.secrets.get(
-                        "openai_api_key", st.session_state.get("openai_api_key", "")
-                    ),
-                    type="password",
-                )
+        st.session_state.connect_clicked = True
+        # change label of connect button to 'Connected'
+        connection_string = create_connection_string(host, port, dbname, user, password)
+        db_engine = create_db_engine(connection_string=connection_string)
 
-                btn_openai_api_key = st.button("Enter")
+        # Right pane for SQL query input and execution
+        if not db_engine:
+            return
+        openai_api_key = st.text_input(
+            "OpenAI API Key",
+            value=st.secrets.get("openai_api_key", st.session_state.get("openai_api_key", "")),
+            type="password",
+        )
 
-                if openai_api_key or btn_openai_api_key:
-                    session_openapi_key = st.session_state.get("openai_api_key")
+        btn_openai_api_key = st.button("Enter")
 
-                    # keep streamlit state that openai_api_key had been entered
-                    if not session_openapi_key or session_openapi_key != openai_api_key:
-                        st.session_state.openai_api_key = openai_api_key
+        if not openai_api_key and not btn_openai_api_key:
+            return
+        session_openapi_key = st.session_state.get("openai_api_key")
 
-                    # openai libs access the key via this environment variable
-                    os.environ["OPENAI_API_KEY"] = st.session_state.openai_api_key
+        # keep streamlit state that openai_api_key had been entered
+        if not session_openapi_key or session_openapi_key != openai_api_key:
+            st.session_state.openai_api_key = openai_api_key
 
-                    model_name = st.selectbox(
-                        "Choose OpenAI model",
-                        ("_Choose a model_", "gpt-3.5-turbo", "text-davinci-003"),
-                    )
+        # openai libs access the key via this environment variable
+        os.environ["OPENAI_API_KEY"] = st.session_state.openai_api_key
 
-                    if not model_name.startswith("_"):
-                        cache_invalidation_triggers = {
-                            "connection_string": connection_string,
-                            "openai_api_key": openai_api_key,
-                            "model_name": model_name,
-                            "schema": str(schema),
-                        }
+        model_name = st.selectbox(
+            "Choose OpenAI model",
+            ("_Choose a model_", "gpt-3.5-turbo", "text-davinci-003"),
+        )
 
-                        # Create LLama DB wrapper
-                        st.markdown(
-                            (
-                                ":blue[Create DB wrapper."
-                                f" Inspect tables and views inside "
-                                f":green[**_{dbname}.{schema}_**]]"
-                            )
-                        )
+        if model_name.startswith("_"):
+            return
+        cache_invalidation_triggers = {
+            "connection_string": connection_string,
+            "openai_api_key": openai_api_key,
+            "model_name": model_name,
+            "schema": str(schema),
+        }
 
-                        sql_database = create_llama_db_wrapper(
-                            db_engine, **cache_invalidation_triggers
-                        )
+        # Create LLama DB wrapper
+        st.markdown(
+            (
+                ":blue[Create DB wrapper."
+                f" Inspect tables and views inside "
+                f":green[**_{dbname}.{schema}_**]]"
+            )
+        )
 
-                        with st.expander(f"Discovered tables in {dbname}.{schema}"):
-                            st.write(sql_database._all_tables)
+        sql_database = create_llama_db_wrapper(db_engine, **cache_invalidation_triggers)
 
-                        # build llama sqlindex
-                        st.markdown(":blue[Build table schema index.]")
-                        table_schema_index, context_builder = build_table_schema_index(
-                            sql_database, **cache_invalidation_triggers
-                        )
+        with st.expander(f"Discovered tables in {dbname}.{schema}"):
+            st.write(sql_database._all_tables)
 
-                        query_history = st.session_state.get(
-                            "query_history", collections.deque(maxlen=10)
-                        )
+        # build llama sqlindex
+        st.markdown(":blue[Introspect the database and build a table-schema index.]")
+        table_schema_index, context_builder = build_table_schema_index(
+            sql_database, **cache_invalidation_triggers
+        )
 
-                        if query_history:
-                            for idx, msg in enumerate(query_history):
-                                message(msg["user"], is_user=True, key=str(f"{idx}_user"))
-                                if msg.get("generated"):
-                                    message(
-                                        msg.get("generated"), is_user=False, key=str(f"{idx}_sql")
-                                    )
-                        else:
-                            st.session_state["query_history"] = query_history
+        query_history = st.session_state.get("query_history", collections.deque(maxlen=10))
 
-                        st.text_input("Enter your NL query:", key="query_str")
+        if query_history:
+            for idx, msg in enumerate(query_history):
+                message(msg["user"], is_user=True, key=str(f"{idx}_user"))
+                if msg.get("generated"):
+                    message(msg.get("generated"), is_user=False, key=str(f"{idx}_sql"))
+        else:
+            st.session_state["query_history"] = query_history
 
-                        dbt_sources_yaml_toggle = st.checkbox(
-                            "Add DBT sources.yaml for additional context",
-                            key="dbt_sources_yaml_toggle",
-                        )
+        st.text_input("Enter your NL query:", key="query_str")
 
-                        if dbt_sources_yaml_toggle:
-                            st.text_area("Paste your DBT sources.yaml:", key="dbt_sources_yaml_str")
+        dbt_sources_yaml_toggle = st.checkbox(
+            "Add DBT sources.yaml for additional context",
+            key="dbt_sources_yaml_toggle",
+        )
 
-                        run = st.button(
-                            "Run",
-                            disabled=not st.session_state.get("query_str"),
-                            on_click=lambda: query_history.append(
-                                {"user": st.session_state.get("query_str")}
-                            ),
-                        )
+        if dbt_sources_yaml_toggle:
+            st.text_area("Paste your DBT sources.yaml:", key="dbt_sources_yaml_str")
 
-                        if not run:
-                            return
+        run = st.button(
+            "Run",
+            disabled=not st.session_state.get("query_str"),
+            on_click=lambda: query_history.append({"user": st.session_state.get("query_str")}),
+        )
 
-                        # Execute the SQL query when 'Run' button is clicked
-                        if not st.session_state.get(
-                            "dbt_sources_yaml_toggle"
-                        ) or st.session_state.get("dbt_sources_yaml_str"):
-                            dbt_sources_yaml_toggle = st.session_state.get(
-                                "dbt_sources_yaml_toggle", False
-                            )
-                            dbt_sources_yaml_str = st.session_state.get("dbt_sources_yaml_str", "")
+        if not run:
+            return
 
-                            cache_invalidation_triggers[
-                                "dbt_sources_yaml_toggle"
-                            ] = dbt_sources_yaml_toggle
-                            cache_invalidation_triggers[
-                                "dbt_sources_yaml_str"
-                            ] = dbt_sources_yaml_str
+        if st.session_state.get("dbt_sources_yaml_toggle") and not st.session_state.get(
+            "dbt_sources_yaml_str"
+        ):
+            return
 
-                            index_to_query = table_schema_index
+        dbt_sources_yaml_toggle = st.session_state.get("dbt_sources_yaml_toggle", False)
+        dbt_sources_yaml_str = st.session_state.get("dbt_sources_yaml_str", "")
 
-                            if dbt_sources_yaml_toggle:
-                                metadata_index = GPTListIndex.from_documents(
-                                    [Document(dbt_sources_yaml_str)]
-                                )
+        cache_invalidation_triggers["dbt_sources_yaml_toggle"] = dbt_sources_yaml_toggle
+        cache_invalidation_triggers["dbt_sources_yaml_str"] = dbt_sources_yaml_str
 
-                                # build ComposableGraph based on table schema index and
-                                # DBT sources yaml index
-                                index_to_query = ComposableGraph.from_indices(
-                                    GPTListIndex,
-                                    [table_schema_index, metadata_index],
-                                    index_summaries=[
-                                        "Tables' schemas generated via database introspection",
-                                        "DBT sources yaml",
-                                    ],
-                                )
+        index_to_query = table_schema_index
 
-                                st.markdown(
-                                    ":blue[Query Composable Graph index of DBT sources.yaml "
-                                    "index and table schema index]"
-                                )
-                            else:
-                                st.markdown(
-                                    ":blue[Query table schema index generated "
-                                    "via database introspection]"
-                                )
+        if dbt_sources_yaml_toggle:
+            metadata_index = GPTListIndex.from_documents([Document(dbt_sources_yaml_str)])
 
-                            # return a condensed summary for the last query
-                            condensed_query_str = SummaryBuilder.build_summary(
-                                map(lambda x: x["user"], query_history)
-                            )
-                            LOGGER.info("Generated condensed query: %s", condensed_query_str)
+            # build ComposableGraph based on table schema index and
+            # DBT sources yaml index
+            index_to_query = ComposableGraph.from_indices(
+                GPTListIndex,
+                [table_schema_index, metadata_index],
+                index_summaries=[
+                    "Tables' schemas generated via database introspection",
+                    "DBT sources yaml",
+                ],
+            )
 
-                            condensed_query_str = condensed_query_str.strip()
+            st.markdown(
+                ":blue[Query the composable graph index consisting of DBT "
+                "sources.yaml index and the table-schema index]"
+            )
+        else:
+            st.markdown(":blue[Query the table-schema index]")
 
-                            # cached resource
-                            sql_context_container = build_sql_context_container(
-                                context_builder,
-                                index_to_query,
-                                condensed_query_str,
-                                **cache_invalidation_triggers,
-                            )
+        # return a condensed summary for the last query
+        condensed_query_str = SummaryBuilder.build_summary(map(lambda x: x["user"], query_history))
+        LOGGER.info("Generated condensed query: %s", condensed_query_str)
 
-                            with st.expander("SQL context"):
-                                st.markdown(
-                                    ":blue[Generated context for SQL query preparation:] "
-                                    f":green[ {sql_context_container.context_str} ]"
-                                )
+        condensed_query_str = condensed_query_str.strip()
 
-                            # return
-                            st.markdown(":blue[Prepare and execute query...]")
-                            try:
-                                # cached resource
-                                index = create_sql_struct_store_index(
-                                    sql_database,
-                                    _sql_context_container=sql_context_container,
-                                    connection_string=connection_string,
-                                    query_str=condensed_query_str,
-                                )
-                                # cached resource
-                                response = query_sql_structure_store(
-                                    _index=index,
-                                    query_str=condensed_query_str,
-                                    **cache_invalidation_triggers,
-                                )
-                            except Exception as ex:
-                                st.markdown(
-                                    ":red[We couldn't generate a valid SQL query. "
-                                    "Please try to refine your question with schema, "
-                                    f"table or column names. Exception info:\n{ex}]"
-                                )
-                                return
+        # cached resource
+        sql_context_container = build_sql_context_container(
+            context_builder,
+            index_to_query,
+            condensed_query_str,
+            **cache_invalidation_triggers,
+        )
 
-                            # st.markdown(
-                            #     ":blue[Generated query:] "
-                            #     f":green[_{response.extra_info['sql_query']}_]"
-                            # )
+        with st.expander("SQL context"):
+            st.markdown(
+                ":blue[Generated context for SQL query preparation:] "
+                f":green[ {sql_context_container.context_str} ]"
+            )
 
-                            sql_query = response.extra_info["sql_query"]
-                            query_history[-1]["generated"] = response.extra_info["sql_query"]
-                            message(sql_query, key=str(f"{len(query_history)}_sql"))
-                            st.dataframe(pd.DataFrame(response.extra_info["result"]))
+        # return
+        st.markdown(":blue[Prepare and execute query...]")
+        try:
+            # cached resource
+            index = create_sql_struct_store_index(
+                sql_database,
+                _sql_context_container=sql_context_container,
+                connection_string=connection_string,
+                query_str=condensed_query_str,
+            )
+            # cached resource
+            response = query_sql_structure_store(
+                _index=index,
+                query_str=condensed_query_str,
+                **cache_invalidation_triggers,
+            )
+        except Exception as ex:
+            st.markdown(
+                ":red[We couldn't generate a valid SQL query. "
+                "Please try to refine your question with schema, "
+                f"table or column names. Exception info:\n{ex}]"
+            )
+            return
 
+        sql_query = response.extra_info["sql_query"]
+        query_history[-1]["generated"] = response.extra_info["sql_query"]
+        message(sql_query, key=str(f"{len(query_history)}_sql"))
+        st.dataframe(pd.DataFrame(response.extra_info["result"]))
     except Exception as ex:
         st.markdown(f":red[{ex}]")
         raise ex
