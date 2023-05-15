@@ -320,24 +320,35 @@ def main() -> int:
                         else:
                             st.session_state["query_history"] = query_history
 
-                        query_str = st.text_input("Enter your NL query:")
+                        st.text_input("Enter your NL query:", key="query_str")
 
                         dbt_sources_yaml_toggle = st.checkbox(
-                            "Add DBT sources.yaml for additional context"
+                            "Add DBT sources.yaml for additional context",
+                            key="dbt_sources_yaml_toggle",
                         )
 
-                        dbt_sources_yaml_str = ""
                         if dbt_sources_yaml_toggle:
-                            dbt_sources_yaml_str = st.text_area("Paste your DBT sources.yaml:")
+                            st.text_area("Paste your DBT sources.yaml:", key="dbt_sources_yaml_str")
 
-                        LOGGER.info("query_str: %s", query_str)
-                        LOGGER.info("dbt_sources_yaml_toggle: %d", dbt_sources_yaml_toggle)
+                        run = st.button(
+                            "Run",
+                            disabled=not st.session_state.get("query_str"),
+                            on_click=lambda: query_history.append(
+                                {"user": st.session_state.get("query_str")}
+                            ),
+                        )
+
+                        if not run:
+                            return
 
                         # Execute the SQL query when 'Run' button is clicked
-                        if (query_str and not dbt_sources_yaml_toggle) or (
-                            query_str and dbt_sources_yaml_toggle and dbt_sources_yaml_str
-                        ):
-                            query_history.append({"user": query_str})
+                        if not st.session_state.get(
+                            "dbt_sources_yaml_toggle"
+                        ) or st.session_state.get("dbt_sources_yaml_str"):
+                            dbt_sources_yaml_toggle = st.session_state.get(
+                                "dbt_sources_yaml_toggle", False
+                            )
+                            dbt_sources_yaml_str = st.session_state.get("dbt_sources_yaml_str", "")
 
                             cache_invalidation_triggers[
                                 "dbt_sources_yaml_toggle"
