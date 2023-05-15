@@ -33,4 +33,4 @@ class SummaryBuilder:
         llm = OpenAI(temperature=0, model_name="gpt-3.5-turbo")
         llm_chain = LLMChain(llm=llm, prompt=PromptTemplate.from_template(REQUST_SUMMARY_TEMPLATE))
         requests_history = "\n".join(map(lambda req: f"Request: {req}", requests))
-        return llm_chain.predict(requests_history=requests_history)[0]
+        return llm_chain.predict(requests_history=requests_history)
