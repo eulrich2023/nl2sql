@@ -1,7 +1,7 @@
 """Streamlit app generate SQL statements from natural language queries."""
-
 import collections
 import os
+import sys
 from typing import Any, Dict, Optional
 from urllib.parse import quote_plus
 
@@ -9,7 +9,6 @@ import chromadb
 import pandas as pd
 import sqlalchemy as sa
 import streamlit as st
-from js_code_plot_generator import JSCodePlotGenerator
 from langchain import OpenAI
 from llama_index import (
     Document,
@@ -27,7 +26,6 @@ from llama_index.indices.struct_store import SQLContextContainerBuilder
 from llama_index.prompts.prompts import TextToSQLPrompt
 from llama_index.storage.storage_context import StorageContext
 from llama_index.vector_stores import ChromaVectorStore
-from rsb import RequestsSummaryBuilder
 from streamlit.components.v1 import html
 from streamlit.logger import get_logger
 from streamlit_chat import message
@@ -214,6 +212,14 @@ def query_sql_structure_store(
 
 def main() -> int:
     """Start the streamlit app."""
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+    # This adds the path of the current file
+    # to the PYTHONPATH variable
+    sys.path.append(dir_path)
+
+    from js_code_plot_generator import JSCodePlotGenerator
+    from rsb import RequestsSummaryBuilder
+
     st.set_page_config(layout="wide")
     st.title("Natural Language to SQL Query Executor")
     st.markdown(
