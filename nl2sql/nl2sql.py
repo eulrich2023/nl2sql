@@ -204,7 +204,7 @@ def query_sql_structure_store(
         Dict[str, Any]: Query response
     """
     response = _index.as_query_engine(
-        query_mode="nl",
+        query_mode="nl", text_to_sql_prompt=RS_TEXT_TO_SQL_PROMPT
     ).query(query_str)
 
     return response
@@ -379,7 +379,8 @@ def main() -> int:
 
         # return a condensed summary for the last query
         condensed_query_str = RequestsSummaryBuilder.build_summary(
-            map(lambda x: x["user"], query_history)
+            map(lambda x: x["user"], query_history),
+            model_name=model_name,
         )
         # TODO: add the condensed query to the history of user messages
         LOGGER.info("Generated condensed query: %s", condensed_query_str)
@@ -430,7 +431,9 @@ def main() -> int:
 
         st.markdown(":blue[Plotting the data. Please wait...]")
 
-        html_plot_js = JSCodePlotGenerator(sql_query=sql_query, data=df).generate_plot()
+        html_plot_js = JSCodePlotGenerator(sql_query=sql_query, data=df).generate_plot(
+            model_name=model_name
+        )
 
         with st.expander("JS Plot Code"):
             st.code(html_plot_js, language="javascript")
