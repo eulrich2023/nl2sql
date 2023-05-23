@@ -2,7 +2,7 @@
 import collections
 import os
 import sys
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 from urllib.parse import quote_plus
 
 import chromadb
@@ -24,6 +24,7 @@ from llama_index.indices.common.struct_store.schema import SQLContextContainer
 from llama_index.indices.list import GPTListIndex
 from llama_index.indices.struct_store import SQLContextContainerBuilder
 from llama_index.prompts.prompts import TextToSQLPrompt
+from llama_index.response.schema import RESPONSE_TYPE
 from llama_index.storage.storage_context import StorageContext
 from llama_index.vector_stores import ChromaVectorStore
 from streamlit.components.v1 import html
@@ -59,6 +60,56 @@ Question: {query_str}
 SQLQuery: """
 
 RS_TEXT_TO_SQL_PROMPT = TextToSQLPrompt(RS_TEXT_TO_SQL_TMPL, stop_token="\nSQLResult:")
+
+
+DEFAULT_DBT_YAML_CONTEXT = """- name: shopify_collects
+  description: Collects are the associations between products and custom collections.
+
+- name: shopify_orders
+  description: Customer orders
+  columns:
+    - name: id
+      description: ID of the order
+    - name: order_number
+      description: The number of the order
+    - name: created_at
+      description: Date the order was created
+    - name: customer__id
+      description: ID of the customer who created the order and foreign key to the shopify_customers table # noqa: E501
+    - name: total_discounts
+      description: Discounts that have been applied to the order
+    - name: shipping_address__country
+      description: Country where the order was shipped
+    - name: total_price
+      description: Total price of the order
+    - name: customer__default_address__country_name
+      description: The name of the country of the default address of the customer
+    - name: shipping_address__country
+      description: The shipping address country
+    - name: financial_status
+      description: Shows the financial status of the order. Can be paid, refunded, partially_refunded # noqa: E501
+    - name: fulfillment_status
+      description: Shows whether the order was fulfilled or partially fulfilled.
+
+- name: shopify_customers
+  description: Table containing customers and information about them, such as record creation date
+  columns:
+    - name: created_at
+      description: Date of record creation
+    - name: id
+      description: ID of the customer
+
+- name: shopify_orders_refunds
+  description: Table with refunds given on orders
+
+- name: shopify_orders_discount_codes
+  description: Table of discount codes and the amounts
+  columns:
+    - name: code
+      description: Discount code
+    - name: amount
+      description: Available amount under this discount code
+"""
 
 
 # Function to create a db_engine string
@@ -139,7 +190,7 @@ def build_sql_context_container(
     """Build a SQL context container from the table schema index."""
     # query_str
     # kwargs
-    if kwargs.get("dbt_sources_yaml_toggle"):
+    if kwargs.get("dbt_sources_yaml_str"):
         _context_builder.query_index_for_context(
             _index_to_query,
             query_str,
@@ -191,7 +242,7 @@ def query_sql_structure_store(
     _index: GPTSQLStructStoreIndex,
     query_str: str,
     **kwargs: Any,
-) -> Dict[str, Any]:
+) -> RESPONSE_TYPE:
     """Query the SQL structure index.
 
     Args:
@@ -252,16 +303,17 @@ def main() -> int:
     try:
         # Connect to DB when 'Connect' is clicked
         if not connect_button and not st.session_state.get("connect_clicked"):
-            return
+            return 1
 
         st.session_state.connect_clicked = True
         # change label of connect button to 'Connected'
-        connection_string = create_connection_string(host, port, dbname, user, password)
+        connection_string = create_connection_string(host, int(port), dbname, user, password)
         db_engine = create_db_engine(connection_string=connection_string)
 
         # Right pane for SQL query input and execution
         if not db_engine:
-            return
+            return 1
+
         openai_api_key = st.text_input(
             "OpenAI API Key",
             value=st.secrets.get("openai_api_key", st.session_state.get("openai_api_key", "")),
@@ -271,7 +323,8 @@ def main() -> int:
         btn_openai_api_key = st.button("Enter")
 
         if not openai_api_key and not btn_openai_api_key:
-            return
+            return 2
+
         session_openapi_key = st.session_state.get("openai_api_key")
 
         # keep streamlit state that openai_api_key had been entered
@@ -286,8 +339,9 @@ def main() -> int:
             ("_Choose a model_", "gpt-3.5-turbo", "text-davinci-003"),
         )
 
-        if model_name.startswith("_"):
-            return
+        if model_name and model_name.startswith("_"):
+            return 3
+
         cache_invalidation_triggers = {
             "connection_string": connection_string,
             "openai_api_key": openai_api_key,
@@ -335,28 +389,31 @@ def main() -> int:
         if dbt_sources_yaml_toggle:
             st.text_area("Paste your DBT sources.yaml:", key="dbt_sources_yaml_str")
 
-        yaml_cfg_is_wrong = st.session_state.get(
-            "dbt_sources_yaml_toggle"
-        ) and not st.session_state.get("dbt_sources_yaml_str")
+        # yaml_cfg_is_wrong  = st.session_state.get(
+        #     "dbt_sources_yaml_toggle"
+        # ) and not st.session_state.get("dbt_sources_yaml_str")
+        yaml_cfg_is_wrong = None
 
         run = st.button(
             "Run",
-            disabled=not st.session_state.get("query_str") or yaml_cfg_is_wrong,
+            disabled=not st.session_state.get("query_str") or yaml_cfg_is_wrong is not None,
             on_click=lambda: query_history.append({"user": st.session_state.get("query_str")}),
         )
 
         if not run:
-            return
+            return 4
 
-        dbt_sources_yaml_toggle = st.session_state.get("dbt_sources_yaml_toggle", False)
-        dbt_sources_yaml_str = st.session_state.get("dbt_sources_yaml_str", "")
+        dbt_sources_yaml_toggle = st.session_state.get("dbt_sources_yaml_toggle", True)
+        dbt_sources_yaml_str = st.session_state.get(
+            "dbt_sources_yaml_str", DEFAULT_DBT_YAML_CONTEXT
+        )
 
         cache_invalidation_triggers["dbt_sources_yaml_toggle"] = dbt_sources_yaml_toggle
         cache_invalidation_triggers["dbt_sources_yaml_str"] = dbt_sources_yaml_str
 
         index_to_query = table_schema_index
 
-        if dbt_sources_yaml_toggle:
+        if dbt_sources_yaml_str:
             metadata_index = GPTListIndex.from_documents([Document(dbt_sources_yaml_str)])
 
             # build ComposableGraph based on table schema index and
@@ -380,7 +437,7 @@ def main() -> int:
         # return a condensed summary for the last query
         condensed_query_str = RequestsSummaryBuilder.build_summary(
             map(lambda x: x["user"], query_history),
-            model_name=model_name,
+            model_name=str(model_name),
         )
         # TODO: add the condensed query to the history of user messages
         LOGGER.info("Generated condensed query: %s", condensed_query_str)
@@ -421,7 +478,7 @@ def main() -> int:
                 "Please try to refine your question with schema, "
                 f"table or column names. Exception info:\n{ex}]"
             )
-            return
+            return 5
 
         sql_query = response.extra_info["sql_query"]
         query_history[-1]["generated"] = response.extra_info["sql_query"]
@@ -432,7 +489,7 @@ def main() -> int:
         st.markdown(":blue[Plotting the data. Please wait...]")
 
         html_plot_js = JSCodePlotGenerator(sql_query=sql_query, data=df).generate_plot(
-            model_name=model_name
+            model_name=str(model_name)
         )
 
         with st.expander("JS Plot Code"):
