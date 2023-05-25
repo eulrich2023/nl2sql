@@ -10,7 +10,7 @@ Streamlit App for natural language to SQL query generation. Tested with Postgres
 
 ## 💻Example Usage
 
-TLDR: Click on the [link](https://dimitar-petrunov-sagedata-nl2sql-nl2sqlnl2sql-epjv90.streamlit.app/) to see it in action.
+TLDR: Click on the [link](https://nl2sql-sagedata.streamlit.app/) to see it in action.
 
 ### Start on localhost:
 
