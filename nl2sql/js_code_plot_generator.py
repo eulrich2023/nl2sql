@@ -18,7 +18,7 @@ That query corresponds to the below natural language request:
 Here is some sample data to use for the plot. It is a json object with the following structure:
 {data_sample}
 
-There is an existing javasctipt global variable called '{data_variable_name}' that contains
+There is an existing javascript global variable called '{data_variable_name}' that contains
 the data from the query above as a json object.
 Create javascript code that uses plotly.js to visualize it in the most sensible way possible.
 Plot inside 'plot' div. Return only the javascript code with no other explanations.

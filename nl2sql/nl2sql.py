@@ -37,7 +37,7 @@ RS_TEXT_TO_SQL_TMPL = """You are an AWS Redshift expert. Given an input question
 first create a syntactically correct {dialect} query to run,
 then look at the results of the query and return the answer to the input question.
 Unless the user specifies in the question a specific number of examples
-to obtain, query for at most 50 results. You can order the results to return the
+to obtain, query for at most 500 results. You can order the results to return the
 most informative data in the database.
 You must query only the columns that are needed to answer the question.
 Wrap each column name in double quotes (") to denote them as delimited identifiers.
