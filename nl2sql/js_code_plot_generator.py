@@ -56,7 +56,7 @@ class JSCodePlotGenerator(object):
             # TODO: create template
             return "<p>Nothing to Show</p>"
 
-        data_variable_name = "sample_data"
+        data_variable_name = "queried_data"
         llm = OpenAI(temperature=0, model_name=model_name)
         llm_chain = LLMChain(llm=llm, prompt=PromptTemplate.from_template(PLOT_TEMPLATE))
 
