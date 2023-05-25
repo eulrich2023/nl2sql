@@ -73,11 +73,7 @@ def create_connection_string(host: str, port: int, dbname: str, user: str, passw
 @st.cache_resource
 def create_db_engine(connection_string: str) -> Any:
     """Connect to the Redshift/Postgres database."""
-    try:
-        return sa.create_engine(connection_string)
-    except Exception as e:
-        st.error(f"Error connecting to the database: {e}")
-        return None
+    return sa.create_engine(connection_string)
 
 
 @st.cache_resource
@@ -139,29 +135,29 @@ def build_sql_context_container(
     """Build a SQL context container from the table schema index."""
     # query_str
     # kwargs
-    if kwargs.get("dbt_sources_yaml_toggle"):
-        _context_builder.query_index_for_context(
-            _index_to_query,
-            query_str,
-            store_context_str=True,
-            query_configs=[
-                {
-                    "index_struct_type": "simple_dict",
-                    "query_mode": "default",
-                    "query_kwargs": {"similarity_top_k": 1, "verbose": True},
-                },
-                {
-                    "index_struct_type": "list",
-                    "query_mode": "default",
-                    "query_kwargs": {"verbose": True},
-                },
-            ],
-        )
-    else:
-        _context_builder.query_index_for_context(
-            _index_to_query, query_str, store_context_str=True, verbose=True
-        )
+    query_index_args = {
+        "index": _index_to_query,
+        "query_str": query_str,
+        "store_context_str": True,
+    }
 
+    if kwargs.get("dbt_sources_yaml_toggle"):
+        query_index_args["query_configs"] = [
+            {
+                "index_struct_type": "simple_dict",
+                "query_mode": "default",
+                "query_kwargs": {"similarity_top_k": 1, "verbose": True},
+            },
+            {
+                "index_struct_type": "list",
+                "query_mode": "default",
+                "query_kwargs": {"verbose": True},
+            },
+        ]
+    else:
+        query_index_args["verbose"] = "True"
+
+    _context_builder.query_index_for_context(**query_index_args)
     return _context_builder.build_context_container()
 
 
@@ -262,6 +258,7 @@ def main() -> int:
         # Right pane for SQL query input and execution
         if not db_engine:
             return
+
         openai_api_key = st.text_input(
             "OpenAI API Key",
             value=st.secrets.get("openai_api_key", st.session_state.get("openai_api_key", "")),
