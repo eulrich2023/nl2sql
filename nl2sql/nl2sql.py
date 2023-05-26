@@ -2,7 +2,7 @@
 import collections
 import os
 import sys
-from typing import Any, Dict, Optional
+from typing import Any, Optional, Union
 from urllib.parse import quote_plus
 
 import chromadb
@@ -24,6 +24,7 @@ from llama_index.indices.common.struct_store.schema import SQLContextContainer
 from llama_index.indices.list import GPTListIndex
 from llama_index.indices.struct_store import SQLContextContainerBuilder
 from llama_index.prompts.prompts import TextToSQLPrompt
+from llama_index.response.schema import RESPONSE_TYPE
 from llama_index.storage.storage_context import StorageContext
 from llama_index.vector_stores import ChromaVectorStore
 from streamlit.components.v1 import html
@@ -128,7 +129,7 @@ def build_table_schema_index(
 @st.cache_resource
 def build_sql_context_container(
     _context_builder: SQLContextContainerBuilder,
-    _index_to_query: BaseGPTIndex,
+    _index_to_query: Union[BaseGPTIndex, ComposableGraph],
     query_str: str,
     **kwargs: Any,
 ) -> SQLContextContainer:
@@ -187,7 +188,7 @@ def query_sql_structure_store(
     _index: GPTSQLStructStoreIndex,
     query_str: str,
     **kwargs: Any,
-) -> Dict[str, Any]:
+) -> RESPONSE_TYPE:
     """Query the SQL structure index.
 
     Args:
@@ -248,7 +249,7 @@ def main() -> int:
     try:
         # Connect to DB when 'Connect' is clicked
         if not connect_button and not st.session_state.get("connect_clicked"):
-            return
+            return 1
 
         st.session_state.connect_clicked = True
         # change label of connect button to 'Connected'
@@ -257,7 +258,7 @@ def main() -> int:
 
         # Right pane for SQL query input and execution
         if not db_engine:
-            return
+            return 2
 
         openai_api_key = st.text_input(
             "OpenAI API Key",
@@ -268,7 +269,7 @@ def main() -> int:
         btn_openai_api_key = st.button("Enter")
 
         if not openai_api_key and not btn_openai_api_key:
-            return
+            return 3
         session_openapi_key = st.session_state.get("openai_api_key")
 
         # keep streamlit state that openai_api_key had been entered
@@ -283,8 +284,9 @@ def main() -> int:
             ("_Choose a model_", "gpt-3.5-turbo", "text-davinci-003"),
         )
 
-        if model_name.startswith("_"):
-            return
+        if str(model_name).startswith("_"):
+            return 4
+
         cache_invalidation_triggers = {
             "connection_string": connection_string,
             "openai_api_key": openai_api_key,
@@ -338,12 +340,12 @@ def main() -> int:
 
         run = st.button(
             "Run",
-            disabled=not st.session_state.get("query_str") or yaml_cfg_is_wrong,
+            disabled=not st.session_state.get("query_str") or yaml_cfg_is_wrong is not None,
             on_click=lambda: query_history.append({"user": st.session_state.get("query_str")}),
         )
 
         if not run:
-            return
+            return 5
 
         dbt_sources_yaml_toggle = st.session_state.get("dbt_sources_yaml_toggle", False)
         dbt_sources_yaml_str = st.session_state.get("dbt_sources_yaml_str", "")
@@ -377,7 +379,7 @@ def main() -> int:
         # return a condensed summary for the last query
         condensed_query_str = RequestsSummaryBuilder.build_summary(
             map(lambda x: x["user"], query_history),
-            model_name=model_name,
+            model_name=str(model_name),
         )
         # TODO: add the condensed query to the history of user messages
         LOGGER.info("Generated condensed query: %s", condensed_query_str)
@@ -398,6 +400,8 @@ def main() -> int:
 
         # return
         st.markdown(":blue[Prepare and execute query...]")
+
+        response: Union[RESPONSE_TYPE, None] = None
         try:
             # cached resource
             index = create_sql_struct_store_index(
@@ -418,7 +422,10 @@ def main() -> int:
                 "Please try to refine your question with schema, "
                 f"table or column names. Exception info:\n{ex}]"
             )
-            return
+            return 6
+
+        if not response:
+            return 7
 
         sql_query = response.extra_info["sql_query"]
         query_history[-1]["generated"] = response.extra_info["sql_query"]
@@ -429,7 +436,7 @@ def main() -> int:
         st.markdown(":blue[Plotting the data. Please wait...]")
 
         html_plot_js = JSCodePlotGenerator(sql_query=sql_query, data=df).generate_plot(
-            model_name=model_name
+            model_name=str(model_name)
         )
 
         with st.expander("JS Plot Code"):
