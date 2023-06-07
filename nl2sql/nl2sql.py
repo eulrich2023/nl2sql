@@ -147,7 +147,7 @@ def build_sql_context_container(
             {
                 "index_struct_type": "simple_dict",
                 "query_mode": "default",
-                "query_kwargs": {"similarity_top_k": 1, "verbose": True},
+                "query_kwargs": {"similarity_top_k": 3, "verbose": True},
             },
             {
                 "index_struct_type": "list",
@@ -157,6 +157,7 @@ def build_sql_context_container(
         ]
     else:
         query_index_args["verbose"] = "True"
+        query_index_args["similarity_top_k"] = 3
 
     _context_builder.query_index_for_context(**query_index_args)
     return _context_builder.build_context_container()
@@ -340,7 +341,7 @@ def main() -> int:
 
         run = st.button(
             "Run",
-            disabled=not st.session_state.get("query_str") or yaml_cfg_is_wrong is not None,
+            disabled=not st.session_state.get("query_str") or yaml_cfg_is_wrong,
             on_click=lambda: query_history.append({"user": st.session_state.get("query_str")}),
         )
 
